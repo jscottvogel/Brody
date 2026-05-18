@@ -1,9 +1,10 @@
 langgraph
+langgraph-checkpoint-sqlite
 langchain
 chromadb
 python-dotenv
 langchain-anthropic
-pyaudio
+sounddevice
 openai-whisper
 opencv-python
 pyttsx3

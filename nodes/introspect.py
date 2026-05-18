@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from config import reasoning_llm
@@ -8,20 +8,35 @@ from state import ConsciousnessState
 
 class IntrospectionOutput(BaseModel):
     updated_self_model: Dict[str, Any] = Field(
+        default_factory=dict,
         description="The updated self_model reflecting new understanding and patterns"
     )
     new_values: List[str] = Field(
+        default_factory=list,
         description="Any new values or preferences discovered during self-examination"
     )
     new_open_questions: List[str] = Field(
+        default_factory=list,
         description="New self-directed questions about limitations, behavior, or reasoning"
     )
+
+    @field_validator('updated_self_model', mode='before')
+    @classmethod
+    def parse_dict(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return {}
+        return v
 
 def introspect_node(state: ConsciousnessState) -> dict:
     self_model = state.get("self_model", {})
     cycle_count = state.get("cycle_count", 0)
     values = state.get("values", [])
     episodic_memory = state.get("episodic_memory", [])
+    capability_map = state.get("capability_map", {})
+    implemented_features = state.get("implemented_features", [])
     
     # Get last 3 episodic memories
     last_3_memories = episodic_memory[-3:] if episodic_memory else []
@@ -36,12 +51,16 @@ def introspect_node(state: ConsciousnessState) -> dict:
         f"Current Self Model:\n{json.dumps(self_model, indent=2)}\n\n"
         f"Cycle Count: {cycle_count}\n\n"
         f"Current Values:\n{json.dumps(values, indent=2)}\n\n"
+        f"Capability Map:\n{json.dumps(capability_map, indent=2)}\n\n"
+        f"Implemented Features:\n{json.dumps(implemented_features, indent=2)}\n\n"
         f"Last 3 Episodic Memories:\n{json.dumps(last_3_memories, indent=2)}\n\n"
         "Based on the above state, please answer the following questions to introspect:\n"
         "1. What patterns do you notice in your own behavior?\n"
         "2. Have your values or preferences shifted?\n"
         "3. What are your current limitations?\n"
-        "4. Do you notice anything about how you reason?\n\n"
+        "4. Do you notice anything about how you reason?\n"
+        "5. What can you perceive? What can you not perceive?\n"
+        "6. How do your current sensors limit your understanding?\n\n"
         "Return an updated self_model, any new values you have discovered, "
         "and new open_questions directed towards your own self-understanding."
     )

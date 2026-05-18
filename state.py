@@ -16,6 +16,12 @@ class ConsciousnessState(TypedDict):
     values: list[str]
     cycle_count: int
     messages: list
+    capability_map: dict
+    sensory_gaps: list[dict]
+    feature_requests: list[dict]
+    implemented_features: list[str]
+
+from config import DEFAULT_CAPABILITY_MAP
 
 def default_state() -> ConsciousnessState:
     return {
@@ -33,5 +39,9 @@ def default_state() -> ConsciousnessState:
         "narrative": "",
         "values": [],
         "cycle_count": 0,
-        "messages": []
+        "messages": [],
+        "capability_map": DEFAULT_CAPABILITY_MAP.copy(),
+        "sensory_gaps": [],
+        "feature_requests": [],
+        "implemented_features": []
     }

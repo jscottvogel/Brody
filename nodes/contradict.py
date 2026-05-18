@@ -18,7 +18,7 @@ class ContradictionAnalysis(BaseModel):
     beliefs_to_add: List[str] = Field(description="New synthesized beliefs to add to the main list", default_factory=list)
 
 class ContradictionOutput(BaseModel):
-    analyzed_contradictions: List[ContradictionAnalysis] = Field(description="List of identified contradictions and their analysis")
+    analyzed_contradictions: List[ContradictionAnalysis] = Field(default_factory=list, description="List of identified contradictions and their analysis")
 
 def contradiction_node(state: ConsciousnessState) -> dict:
     beliefs = state.get("beliefs", [])

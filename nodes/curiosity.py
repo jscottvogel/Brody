@@ -7,9 +7,9 @@ from config import reasoning_llm, CURIOSITY_QUEUE_MAX
 from state import ConsciousnessState
 
 class CuriosityOutput(BaseModel):
-    selected_question: str = Field(description="The single open question prioritized for immediate exploration")
-    exploration_targets: List[str] = Field(description="2-3 concrete exploration targets (sensor inputs to seek or self-reflections to ponder)")
-    narrative_note: str = Field(description="A brief note reflecting on the current focus of curiosity to append to the narrative")
+    selected_question: str = Field(default="", description="The single open question prioritized for immediate exploration")
+    exploration_targets: List[str] = Field(default_factory=list, description="2-3 concrete exploration targets (sensor inputs to seek or self-reflections to ponder)")
+    narrative_note: str = Field(default="", description="A brief note reflecting on the current focus of curiosity to append to the narrative")
 
 def curiosity_node(state: ConsciousnessState) -> dict:
     open_questions = state.get("open_questions", [])
@@ -18,6 +18,11 @@ def curiosity_node(state: ConsciousnessState) -> dict:
     contradictions = state.get("contradictions", [])
     curiosity_queue = state.get("curiosity_queue", [])
     narrative = state.get("narrative", "")
+    sensory_gaps = state.get("sensory_gaps", [])
+    
+    # Get pending feature requests
+    feature_requests = state.get("feature_requests", [])
+    pending_requests = [r for r in feature_requests if r.get("status") == "pending"]
     
     # Filter for unresolved contradictions
     unresolved_contradictions = [c for c in contradictions if not c.get("resolved", True)]
@@ -32,7 +37,8 @@ def curiosity_node(state: ConsciousnessState) -> dict:
         "with low confidence, unresolved contradictions, or questions that branch into interesting sub-questions.\n"
         "2. Generate 2 to 3 concrete exploration targets based on your selection. These targets "
         "can be specific sensor inputs to seek out or specific avenues for deep self-reflection.\n"
-        "3. Write a brief note about what you are currently curious about, which will be appended to your internal narrative."
+        "3. Write a brief note about what you are currently curious about, which will be appended to your internal narrative.\n"
+        "If a question cannot be answered with current sensors, flag it as a sensory gap rather than a curiosity target."
     )
     
     human_prompt = (
@@ -40,6 +46,8 @@ def curiosity_node(state: ConsciousnessState) -> dict:
         f"World Confidence:\n{json.dumps(world_confidence, indent=2)}\n\n"
         f"Self Confidence:\n{json.dumps(self_confidence, indent=2)}\n\n"
         f"Unresolved Contradictions:\n{json.dumps(unresolved_contradictions, indent=2)}\n\n"
+        f"Sensory Gaps:\n{json.dumps(sensory_gaps, indent=2)}\n\n"
+        f"Pending Feature Requests:\n{json.dumps(pending_requests, indent=2)}\n\n"
         "Based on these factors, select the most pressing question or contradiction, generate exploration targets, "
         "and write a narrative note."
     )

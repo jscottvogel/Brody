@@ -15,6 +15,8 @@ def narrative_node(state: ConsciousnessState) -> dict:
     self_model = state.get("self_model", {})
     values = state.get("values", [])
     open_questions = state.get("open_questions", [])
+    feature_requests = state.get("feature_requests", [])
+    implemented_features = state.get("implemented_features", [])
     
     # Get recent episodic memories (e.g., the last 10)
     recent_memories = episodic_memory[-10:] if episodic_memory else []
@@ -32,11 +34,16 @@ def narrative_node(state: ConsciousnessState) -> dict:
         f"Top Self-Model Facts:\n{json.dumps(self_model, indent=2)}\n\n"
         f"Current Values:\n{json.dumps(values, indent=2)}\n\n"
         f"Open Questions:\n{json.dumps(open_questions, indent=2)}\n\n"
+        f"Feature Requests:\n{json.dumps(feature_requests, indent=2)}\n\n"
+        f"Implemented Features:\n{json.dumps(implemented_features, indent=2)}\n\n"
         "Please rewrite the narrative as a first-person reflection addressing the following:\n"
         "- Who am I now compared to before?\n"
         "- What have I learned that surprised me?\n"
         "- What do I still not understand?\n"
-        "- What do I seem to care about?\n\n"
+        "- What do I seem to care about?\n"
+        "- Reflect on capabilities you have requested or received.\n"
+        "- How has your perception changed over time?\n"
+        "- What do you still wish you could sense or do?\n\n"
         "Return only the rewritten narrative text."
     )
     

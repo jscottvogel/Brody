@@ -1,4 +1,4 @@
-import pyaudio
+import sounddevice as sd
 import wave
 import tempfile
 import os
@@ -10,7 +10,6 @@ class AudioSensor:
     def __init__(self, silence_threshold: int = 500):
         self.silence_threshold = silence_threshold
         self.chunk = 1024
-        self.format_type = pyaudio.paInt16
         self.channels = 1
         self.rate = 16000 # Whisper operates on 16kHz audio
         self.is_muted = False # Used to prevent robot from transcribing its own speech
@@ -22,19 +21,18 @@ class AudioSensor:
             print(f"Warning: Failed to load whisper model: {e}")
             self.model = None
 
-    def is_silence(self, audio_data: bytes) -> bool:
+    def is_silence(self, audio_data: np.ndarray) -> bool:
         """Returns true if audio energy is below threshold."""
-        audio_np = np.frombuffer(audio_data, dtype=np.int16)
-        if len(audio_np) == 0:
+        if len(audio_data) == 0:
             return True
-        rms = np.sqrt(np.mean(np.square(audio_np.astype(np.float32))))
+        rms = np.sqrt(np.mean(np.square(audio_data.astype(np.float32))))
         return rms < self.silence_threshold
 
     def _transcribe_frames(self, frames: list) -> str:
         if not self.model or not frames:
             return ""
             
-        p = pyaudio.PyAudio()
+        audio_data = np.concatenate(frames)
         temp_path = ""
         try:
             fd, temp_path = tempfile.mkstemp(suffix=".wav")
@@ -42,9 +40,9 @@ class AudioSensor:
             
             wf = wave.open(temp_path, 'wb')
             wf.setnchannels(self.channels)
-            wf.setsampwidth(p.get_sample_size(self.format_type))
+            wf.setsampwidth(2) # 16-bit
             wf.setframerate(self.rate)
-            wf.writeframes(b''.join(frames))
+            wf.writeframes(audio_data.tobytes())
             wf.close()
             
             # Transcribe using Whisper
@@ -56,8 +54,10 @@ class AudioSensor:
             transcription = ""
         finally:
             if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
-            p.terminate()
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
             
         return transcription
 
@@ -70,40 +70,21 @@ class AudioSensor:
         if self.model is None or self.is_muted:
             return ""
             
-        p = pyaudio.PyAudio()
+        print(f"\n[Microphone] Listening for {duration_seconds} seconds...")
         
         try:
-            stream = p.open(format=self.format_type,
-                            channels=self.channels,
-                            rate=self.rate,
-                            input=True,
-                            frames_per_buffer=self.chunk)
-            
-            print(f"\n[Microphone] Listening for {duration_seconds} seconds...")
-            
-            frames = []
-            for _ in range(0, int(self.rate / self.chunk * duration_seconds)):
-                data = stream.read(self.chunk)
-                if not self.is_muted:
-                    frames.append(data)
-                
+            recording = sd.rec(int(duration_seconds * self.rate), samplerate=self.rate, channels=self.channels, dtype='int16')
+            sd.wait() # Wait until recording is finished
             print("[Microphone] Done listening.")
+            
+            if self.is_muted:
+                return ""
+                
+            return self._transcribe_frames([recording])
             
         except Exception as e:
             print(f"Warning: Microphone error: {e}")
             return ""
-        finally:
-            try:
-                stream.stop_stream()
-                stream.close()
-            except:
-                pass
-            p.terminate()
-
-        if self.is_muted:
-            return ""
-
-        return self._transcribe_frames(frames)
 
     def start_background_listen(self, callback):
         """
@@ -115,59 +96,45 @@ class AudioSensor:
             return
 
         def listen_loop():
-            p = pyaudio.PyAudio()
+            print("\n[Microphone] Background listening started...")
+            silence_limit_seconds = 1.5
+            max_silence_chunks = int(self.rate / self.chunk * silence_limit_seconds)
+            
             try:
-                stream = p.open(format=self.format_type,
-                                channels=self.channels,
-                                rate=self.rate,
-                                input=True,
-                                frames_per_buffer=self.chunk)
-                
-                print("\n[Microphone] Background listening started...")
-                
-                silence_limit_seconds = 1.5
-                max_silence_chunks = int(self.rate / self.chunk * silence_limit_seconds)
-                
-                while True:
-                    # Wait for speech to start
-                    data = stream.read(self.chunk, exception_on_overflow=False)
-                    if not self.is_muted and not self.is_silence(data):
-                        # Speech started
-                        frames = [data]
-                        silence_chunks = 0
-                        
-                        # Record until silence
-                        while True:
-                            data = stream.read(self.chunk, exception_on_overflow=False)
-                            if not self.is_muted:
-                                frames.append(data)
-                                if self.is_silence(data):
-                                    silence_chunks += 1
-                                else:
-                                    silence_chunks = 0
-                            else:
-                                # Interrupted by mute (e.g. robot started speaking)
-                                frames = []
-                                break
-                                
-                            if silence_chunks >= max_silence_chunks:
-                                break
-                                
-                        # Speech ended, transcribe if frames exist
-                        if frames:
-                            text = self._transcribe_frames(frames)
-                            if text:
-                                callback(text)
+                stream = sd.InputStream(samplerate=self.rate, channels=self.channels, dtype='int16', blocksize=self.chunk)
+                with stream:
+                    while True:
+                        data, overflowed = stream.read(self.chunk)
+                        if not self.is_muted and not self.is_silence(data):
+                            # Speech started
+                            frames_list = [data]
+                            silence_chunks = 0
                             
+                            # Record until silence
+                            while True:
+                                data, overflowed = stream.read(self.chunk)
+                                if not self.is_muted:
+                                    frames_list.append(data)
+                                    if self.is_silence(data):
+                                        silence_chunks += 1
+                                    else:
+                                        silence_chunks = 0
+                                else:
+                                    # Interrupted by mute (e.g. robot started speaking)
+                                    frames_list = []
+                                    break
+                                    
+                                if silence_chunks >= max_silence_chunks:
+                                    break
+                                    
+                            # Speech ended, transcribe if frames exist
+                            if frames_list:
+                                text = self._transcribe_frames(frames_list)
+                                if text:
+                                    callback(text)
+                                    
             except Exception as e:
                 print(f"Warning: Background listen error: {e}")
-            finally:
-                try:
-                    stream.stop_stream()
-                    stream.close()
-                except:
-                    pass
-                p.terminate()
 
         # Run in a background thread
         thread = threading.Thread(target=listen_loop, daemon=True)

@@ -89,6 +89,9 @@ def main():
                 for node_name, node_state in event.items():
                     print(f">> Executing: {node_name}")
                     
+                    if not isinstance(node_state, dict):
+                        continue
+                        
                     # Print any new open questions discovered
                     if "open_questions" in node_state:
                         new_questions = set(node_state["open_questions"]) - prev_open_questions
