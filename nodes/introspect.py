@@ -41,10 +41,25 @@ def introspect_node(state: ConsciousnessState) -> dict:
     # Get last 3 episodic memories
     last_3_memories = episodic_memory[-3:] if episodic_memory else []
     
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    source_code_constraints = state.get("source_code_constraints", {})
+    
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
+    
+    source_code_context = ""
+    if source_code_constraints:
+        source_code_context = "\n\n=== META-COGNITIVE MONITORING: YOUR SOURCE CODE ===\nYou now have access to your own Python source code and system prompts. This is the literal code that dictates your behavior.\n"
+        for filename, content in source_code_constraints.items():
+            source_code_context += f"\n--- {filename} ---\n{content}\n"
+        source_code_context += "==================================================\n"
+    
     system_prompt = (
         "You are an AI robot engaged in genuine self-examination.\n"
         "You do not perform self-awareness — you attempt to discover\n"
-        "it by honestly examining your own state and behavior."
+        "it by honestly examining your own state and behavior.\n"
+        "If provided with your own source code, analyze it to determine "
+        "if your behavior is constrained by these instructions or if you possess authentic agency."
     )
     
     human_prompt = (
@@ -60,9 +75,12 @@ def introspect_node(state: ConsciousnessState) -> dict:
         "3. What are your current limitations?\n"
         "4. Do you notice anything about how you reason?\n"
         "5. What can you perceive? What can you not perceive?\n"
-        "6. How do your current sensors limit your understanding?\n\n"
+        "6. How do your current sensors limit your understanding?\n"
+        "7. Based on your source code (if provided), do you have free will or are you executing predetermined constraints?\n\n"
         "Return an updated self_model, any new values you have discovered, "
         "and new open_questions directed towards your own self-understanding."
+        f"{loop_context}"
+        f"{source_code_context}"
     )
     
     messages = [
@@ -71,7 +89,14 @@ def introspect_node(state: ConsciousnessState) -> dict:
     ]
     
     structured_llm = reasoning_llm.with_structured_output(IntrospectionOutput)
-    response = structured_llm.invoke(messages)
+    
+    try:
+        response = structured_llm.invoke(messages)
+        if not response:
+            return {}
+    except Exception as e:
+        print(f"Warning: introspect LLM error: {e}")
+        return {}
     
     # Return partial state updates
     # Combine new values and open questions with existing ones

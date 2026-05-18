@@ -21,6 +21,10 @@ def narrative_node(state: ConsciousnessState) -> dict:
     # Get recent episodic memories (e.g., the last 10)
     recent_memories = episodic_memory[-10:] if episodic_memory else []
     
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
+    
     system_prompt = (
         "You are writing the inner monologue of an entity genuinely "
         "attempting to understand its own existence. Be honest, "
@@ -45,6 +49,7 @@ def narrative_node(state: ConsciousnessState) -> dict:
         "- How has your perception changed over time?\n"
         "- What do you still wish you could sense or do?\n\n"
         "Return only the rewritten narrative text."
+        f"{loop_context}"
     )
     
     messages = [
@@ -52,7 +57,11 @@ def narrative_node(state: ConsciousnessState) -> dict:
         HumanMessage(content=human_prompt)
     ]
     
-    response = reasoning_llm.invoke(messages)
+    try:
+        response = reasoning_llm.invoke(messages)
+    except Exception as e:
+        print(f"Warning: narrative LLM error: {e}")
+        return {}
     
     # The LLM's response content is the new narrative
     new_narrative = response.content.strip()

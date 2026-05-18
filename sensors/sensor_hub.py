@@ -10,6 +10,13 @@ class SensorHub:
         self.vision_sensor = VisionSensor()
         self.speaker = Speaker(audio_sensor=self.audio_sensor)
         self.last_frame = None
+        self.recent_speech = []
+        
+        # Start continuous audio buffering
+        self.audio_sensor.start_background_listen()
+        
+        # Start continuous video buffering
+        self.vision_sensor.start_background_capture(interval_seconds=1)
 
     def get_sensor_input(self) -> dict:
         """
@@ -18,11 +25,11 @@ class SensorHub:
         """
         print("\n[Sensor Hub] Capturing sensory snapshot...")
         
-        # Capture Audio (Records for fixed 4s window and transcribes)
-        audio_text = self.audio_sensor.listen(duration_seconds=4)
+        # Capture Audio (Pulls instantly from the background buffer)
+        audio_text = self.audio_sensor.get_buffered_text()
         
-        # Capture Vision
-        current_frame = self.vision_sensor.capture_frame()
+        # Capture Vision (Pulls instantly from the background buffer)
+        current_frame = self.vision_sensor.get_latest_frame()
         
         scene_desc = ""
         scene_change = ""
@@ -67,6 +74,7 @@ class SensorHub:
         """
         Speaks response while suppressing audio capture.
         """
+        self.recent_speech.append(text)
         self.speaker.speak(text)
 
 # Create a global instance so nodes/main can use the same hub

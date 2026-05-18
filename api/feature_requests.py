@@ -1,7 +1,9 @@
 import json
 import os
 import sys
+import datetime
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -50,17 +52,42 @@ class ImplementBody(BaseModel):
 class RejectBody(BaseModel):
     reason: str
 
+class ChatMessage(BaseModel):
+    text: str
+
 @app.get("/state")
 def get_state():
     return read_state()
+
+@app.get("/latest_view")
+def get_latest_view():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    img_path = os.path.join(base_dir, "latest_view.jpg")
+    if os.path.exists(img_path):
+        return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+    raise HTTPException(status_code=404, detail="No video feed available")
 
 @app.get("/requests")
 def get_requests():
     state = read_state()
     requests = state.get("feature_requests", [])
-    # Sort by priority descending
-    requests.sort(key=lambda x: x.get("priority", 0.0), reverse=True)
+    requests.sort(key=lambda x: x.get("cycle_requested", 0))
+    for i, req in enumerate(requests):
+        req["sequence_number"] = i + 1
     return requests
+
+@app.post("/chat")
+def post_chat(msg: ChatMessage):
+    state = read_state()
+    chat_history = state.get("chat_history", [])
+    chat_history.append({
+        "role": "user",
+        "text": msg.text,
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+    state["chat_history"] = chat_history
+    write_state(state)
+    return {"status": "success", "message": "Chat received"}
 
 @app.get("/requests/pending")
 def get_pending_requests():

@@ -27,6 +27,10 @@ def contradiction_node(state: ConsciousnessState) -> dict:
     current_contradictions = state.get("contradictions", [])
     current_open_questions = state.get("open_questions", [])
     
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
+    
     if len(beliefs) < 2:
         return {} # Need at least 2 beliefs to find a contradiction
     
@@ -47,6 +51,7 @@ def contradiction_node(state: ConsciousnessState) -> dict:
         f"Current World Model:\n{json.dumps(world_model, indent=2)}\n\n"
         f"Current Self Model:\n{json.dumps(self_model, indent=2)}\n\n"
         "Please analyze the beliefs for any contradictions."
+        f"{loop_context}"
     )
     
     messages = [
@@ -55,7 +60,14 @@ def contradiction_node(state: ConsciousnessState) -> dict:
     ]
     
     structured_llm = analytical_llm.with_structured_output(ContradictionOutput)
-    response = structured_llm.invoke(messages)
+    
+    try:
+        response = structured_llm.invoke(messages)
+        if not response:
+            return {}
+    except Exception as e:
+        print(f"Warning: contradict LLM error: {e}")
+        return {}
     
     if not response.analyzed_contradictions:
         return {}

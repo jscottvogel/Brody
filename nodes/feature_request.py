@@ -31,6 +31,10 @@ def feature_request_node(state: ConsciousnessState) -> dict:
             
     if not target_gap:
         return {} # No unaddressed gaps
+        
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
 
     system_prompt = (
         "You are an AI that has discovered a limitation in its own "
@@ -44,6 +48,7 @@ def feature_request_node(state: ConsciousnessState) -> dict:
         "Include a 'spoken_statement' in this format: "
         "'I have identified a gap in my perception. I am requesting the ability to sense [capability]. "
         "Without it I cannot understand [what you would understand].'"
+        f"{loop_context}"
     )
 
     messages = [

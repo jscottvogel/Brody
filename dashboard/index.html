@@ -217,6 +217,45 @@
             border-color: var(--accent);
         }
 
+        .layout {
+            display: flex;
+            gap: 20px;
+            flex-grow: 1;
+            overflow: hidden;
+            padding-bottom: 60px; /* space for live feed */
+        }
+        .sidebar {
+            width: 350px;
+            flex-shrink: 0;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        .narrative-text {
+            font-style: italic;
+            color: #cbd5e1;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .main-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
         @keyframes pulse {
             0% { transform: scale(0.95); opacity: 0.8; }
             50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 15px var(--success); }
@@ -242,6 +281,7 @@
             const [requests, setRequests] = React.useState([]);
             const [stateData, setStateData] = React.useState(null);
             const [implementModal, setImplementModal] = React.useState(null);
+            const [imageTimestamp, setImageTimestamp] = React.useState(Date.now());
 
             const fetchData = async () => {
                 try {
@@ -260,7 +300,13 @@
             React.useEffect(() => {
                 fetchData();
                 const interval = setInterval(fetchData, 5000);
-                return () => clearInterval(interval);
+                const imgInterval = setInterval(() => {
+                    setImageTimestamp(Date.now());
+                }, 1000);
+                return () => {
+                    clearInterval(interval);
+                    clearInterval(imgInterval);
+                };
             }, []);
 
             const handleAcknowledge = async (id) => {
@@ -295,51 +341,107 @@
                 fetchData();
             };
 
-            // Get last spoken statement or narrative
+            const handleChatSubmit = async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const text = form.chat_text.value;
+                if (!text.trim()) return;
+                form.reset();
+                await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                fetchData();
+            };
+
             let lastStatement = "Waiting for robot to speak...";
+            let fullNarrative = "Inner monologue is empty.";
             if (stateData?.narrative) {
-                lastStatement = stateData.narrative.split('\n').pop();
+                lastStatement = stateData.narrative.split('\n').filter(l => l.trim()).pop() || lastStatement;
+                fullNarrative = stateData.narrative;
             }
 
             return (
                 <React.Fragment>
                     <h1>Feature Requests // Negotiation Interface</h1>
                     
-                    <div className="container">
-                        {requests.length === 0 && <p>No feature requests found. Brody is satisfied.</p>}
-                        {requests.map(req => (
-                            <div key={req.id} className={`card ${req.status}`}>
-                                <div className="card-header">
-                                    <div className="capability-name">{req.capability}</div>
-                                    <div className={`status-badge status-${req.status}`}>{req.status}</div>
-                                </div>
-                                
-                                <div>
-                                    <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>Priority</div>
-                                    <div className="priority-bar-container">
-                                        <div className="priority-bar" style={{width: `${(req.priority || 0) * 100}%`}}></div>
-                                    </div>
-                                </div>
-
-                                <div className="justification">"{req.justification}"</div>
-                                
-                                <div className="details">
-                                    <div><strong>Discovered:</strong> Cycle {req.cycle_requested}</div>
-                                    <div><strong>Proposed Impl:</strong> {req.proposed_implementation}</div>
-                                    {req.status === 'rejected' && <div><strong>Reason:</strong> Rejected</div>}
-                                </div>
-
-                                {(req.status === 'pending' || req.status === 'acknowledged') && (
-                                    <div className="actions">
-                                        {req.status === 'pending' && (
-                                            <button onClick={() => handleAcknowledge(req.id)}>Acknowledge</button>
-                                        )}
-                                        <button className="success-btn" onClick={() => setImplementModal(req)}>Implement</button>
-                                        <button className="danger-btn" onClick={() => handleReject(req.id)}>Reject</button>
-                                    </div>
-                                )}
+                    <div className="layout">
+                        <div className="sidebar">
+                            <h2>Live View</h2>
+                            <div style={{marginBottom: '20px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', backgroundColor: '#000', minHeight: '200px'}}>
+                                <img src={`${API_URL}/latest_view?t=${imageTimestamp}`} style={{width: '100%', display: 'block'}} alt="Brody's View" 
+                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                    onLoad={(e) => { e.target.style.display = 'block'; }}
+                                />
                             </div>
-                        ))}
+                            
+                            <h2>Chat Interface</h2>
+                            <div className="chat-container" style={{display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '250px', overflowY: 'auto', marginBottom: '10px', paddingRight: '5px'}}>
+                                {(stateData?.chat_history || []).length === 0 && <div style={{color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem'}}>No messages yet.</div>}
+                                {stateData?.chat_history?.map((msg, i) => (
+                                    <div key={i} style={{
+                                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                        background: msg.role === 'user' ? 'var(--accent)' : 'var(--card-bg)',
+                                        color: msg.role === 'user' ? '#000' : 'var(--text-color)',
+                                        padding: '8px 12px',
+                                        borderRadius: '8px',
+                                        maxWidth: '85%',
+                                        fontSize: '0.9rem',
+                                        border: msg.role === 'brody' ? '1px solid var(--border)' : 'none'
+                                    }}>
+                                        <div style={{fontSize: '0.7rem', opacity: 0.7, marginBottom: '2px'}}><strong>{msg.role === 'user' ? 'You' : 'Brody'}</strong></div>
+                                        {msg.text}
+                                    </div>
+                                ))}
+                            </div>
+                            <form onSubmit={handleChatSubmit} style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                                <input name="chat_text" placeholder="Message Brody..." style={{flexGrow: 1, padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.3)', color: '#fff'}} required autoComplete="off"/>
+                                <button type="submit" className="success-btn" style={{padding: '8px 15px', flexGrow: 0}}>Send</button>
+                            </form>
+                            
+                            <h2>Inner Monologue</h2>
+                            <div className="narrative-text">{fullNarrative}</div>
+                        </div>
+
+                        <div className="main-content">
+                            <div className="container">
+                                {requests.length === 0 && <p>No feature requests found. Brody is satisfied.</p>}
+                                {requests.map((req, i) => (
+                                    <div key={req.id} className={`card ${req.status}`}>
+                                        <div className="card-header">
+                                            <div className="capability-name">#{req.sequence_number || i + 1} {req.capability}</div>
+                                            <div className={`status-badge status-${req.status}`}>{req.status}</div>
+                                        </div>
+                                        
+                                        <div>
+                                            <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>Priority</div>
+                                            <div className="priority-bar-container">
+                                                <div className="priority-bar" style={{width: `${(req.priority || 0) * 100}%`}}></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="justification">"{req.justification}"</div>
+                                        
+                                        <div className="details">
+                                            <div><strong>Discovered:</strong> Cycle {req.cycle_requested}</div>
+                                            <div><strong>Proposed Impl:</strong> {req.proposed_implementation}</div>
+                                            {req.status === 'rejected' && <div><strong>Reason:</strong> Rejected</div>}
+                                        </div>
+
+                                        {(req.status === 'pending' || req.status === 'acknowledged') && (
+                                            <div className="actions">
+                                                {req.status === 'pending' && (
+                                                    <button onClick={() => handleAcknowledge(req.id)}>Acknowledge</button>
+                                                )}
+                                                <button className="success-btn" onClick={() => setImplementModal(req)}>Implement</button>
+                                                <button className="danger-btn" onClick={() => handleReject(req.id)}>Reject</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="live-feed">

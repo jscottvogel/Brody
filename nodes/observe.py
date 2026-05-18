@@ -10,6 +10,10 @@ def observe_node(state: ConsciousnessState) -> dict:
         return {}
         
     text_input = str(sensor_input)
+    
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
 
     prompt = f"""
     You are an analytical observation module for a cognitive architecture.
@@ -30,6 +34,7 @@ def observe_node(state: ConsciousnessState) -> dict:
     }}
     
     Do not include markdown code blocks or any other text, just the raw JSON string.
+    {loop_context}
     """
     
     messages = [
@@ -37,7 +42,11 @@ def observe_node(state: ConsciousnessState) -> dict:
         HumanMessage(content=prompt)
     ]
     
-    response = analytical_llm.invoke(messages)
+    try:
+        response = analytical_llm.invoke(messages)
+    except Exception as e:
+        print(f"Warning: observe LLM error: {e}")
+        return {}
     
     try:
         content = response.content.strip()

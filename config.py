@@ -7,6 +7,7 @@ load_dotenv()
 
 # Define model in one place
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-3-7-sonnet-20250219")
+CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", 0))
 
 # reasoning_llm: temperature 0.7 for introspective reasoning
 reasoning_llm = ChatAnthropic(
@@ -67,4 +68,4 @@ DEFAULT_CAPABILITY_MAP = {
     }
 }
 
-__all__ = ["reasoning_llm", "analytical_llm", "CYCLE_LIMIT", "CURIOSITY_QUEUE_MAX", "DEFAULT_CAPABILITY_MAP"]
+__all__ = ["reasoning_llm", "analytical_llm", "CYCLE_LIMIT", "CURIOSITY_QUEUE_MAX", "DEFAULT_CAPABILITY_MAP", "CAMERA_INDEX"]

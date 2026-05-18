@@ -26,7 +26,10 @@ def gap_detect_node(state: ConsciousnessState) -> dict:
     recent_questions = open_questions[-5:] if open_questions else []
     unresolved_contradictions = [c for c in contradictions if not c.get("resolved", True)]
     recent_memories = episodic_memory[-5:] if episodic_memory else []
-
+    
+    reasoning_graph = state.get("reasoning_graph", {})
+    detected_loops = state.get("detected_loops", [])
+    loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
     system_prompt = (
         "You are a robotic awareness module analyzing your own limitations.\n"
         "Given what this robot is curious about and what it cannot "
@@ -47,6 +50,7 @@ def gap_detect_node(state: ConsciousnessState) -> dict:
         f"Unresolved Contradictions:\n{json.dumps(unresolved_contradictions, indent=2)}\n\n"
         f"Last 5 Episodic Memories:\n{json.dumps(recent_memories, indent=2)}\n\n"
         "Please identify any missing capabilities."
+        f"{loop_context}"
     )
 
     messages = [

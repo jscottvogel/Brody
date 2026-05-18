@@ -13,6 +13,8 @@ class AudioSensor:
         self.channels = 1
         self.rate = 16000 # Whisper operates on 16kHz audio
         self.is_muted = False # Used to prevent robot from transcribing its own speech
+        self.transcription_buffer = []
+        self._background_thread = None
         
         print("Loading Whisper model ('base'). This might take a moment if it's the first run...")
         try:
@@ -20,6 +22,14 @@ class AudioSensor:
         except Exception as e:
             print(f"Warning: Failed to load whisper model: {e}")
             self.model = None
+
+    def get_buffered_text(self) -> str:
+        """Retrieves and clears the transcription buffer."""
+        if not self.transcription_buffer:
+            return ""
+        text = " ".join(self.transcription_buffer)
+        self.transcription_buffer.clear()
+        return text
 
     def is_silence(self, audio_data: np.ndarray) -> bool:
         """Returns true if audio energy is below threshold."""
@@ -86,7 +96,7 @@ class AudioSensor:
             print(f"Warning: Microphone error: {e}")
             return ""
 
-    def start_background_listen(self, callback):
+    def start_background_listen(self):
         """
         Continuously listens, fires callback when speech detected.
         Uses silence threshold to detect end of utterance.
@@ -131,11 +141,12 @@ class AudioSensor:
                             if frames_list:
                                 text = self._transcribe_frames(frames_list)
                                 if text:
-                                    callback(text)
+                                    print(f"[Microphone] Buffered: {text}")
+                                    self.transcription_buffer.append(text)
                                     
             except Exception as e:
                 print(f"Warning: Background listen error: {e}")
 
         # Run in a background thread
-        thread = threading.Thread(target=listen_loop, daemon=True)
-        thread.start()
+        self._background_thread = threading.Thread(target=listen_loop, daemon=True)
+        self._background_thread.start()

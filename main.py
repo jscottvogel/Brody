@@ -2,6 +2,7 @@ import argparse
 import sys
 import os
 import shutil
+import json
 
 from graph import builder, memory, run_config
 from state import default_state
@@ -62,6 +63,8 @@ def main():
                 
             current_state = state_snapshot.values
             cycle_count = current_state.get("cycle_count", 0)
+            chat_history = current_state.get("chat_history", [])
+            last_chat_count = len(chat_history)
             
             # Fetch live sensor input and format for state
             raw_input = hub.get_sensor_input()
@@ -69,11 +72,42 @@ def main():
                     
             # Inject new sensor input into the paused state
             curiosity_queue = current_state.get("curiosity_queue", [])
+            
+            # Synchronize with state.json to pick up changes made by the dashboard API
+            try:
+                if os.path.exists("state.json"):
+                    with open("state.json", "r") as f:
+                        api_state = json.load(f)
+                        if "feature_requests" in api_state:
+                            current_state["feature_requests"] = api_state["feature_requests"]
+                        if "capability_map" in api_state:
+                            current_state["capability_map"] = api_state["capability_map"]
+                        if "implemented_features" in api_state:
+                            current_state["implemented_features"] = api_state["implemented_features"]
+                        if "chat_history" in api_state:
+                            current_state["chat_history"] = api_state["chat_history"]
+                            chat_history = api_state["chat_history"]
+            except Exception as e:
+                print(f"Warning: Failed to read state.json: {e}")
+
+            # Inject new chat messages into the sensor string BEFORE updating state
+            new_chat_messages = []
+            if len(chat_history) > last_chat_count:
+                for msg in chat_history[last_chat_count:]:
+                    if msg.get("role") == "user":
+                        new_chat_messages.append(f"The user typed a message: '{msg.get('text')}'")
+            if new_chat_messages:
+                sensor_input += "\n" + "\n".join(new_chat_messages)
+
             consciousness_graph.update_state(
                 run_config, 
                 {
                     "sensor_input": sensor_input,
-                    "curiosity_queue": curiosity_queue
+                    "curiosity_queue": curiosity_queue,
+                    "feature_requests": current_state.get("feature_requests", []),
+                    "capability_map": current_state.get("capability_map", {}),
+                    "implemented_features": current_state.get("implemented_features", []),
+                    "chat_history": chat_history
                 }
             )
             
@@ -124,6 +158,45 @@ def main():
                                 hub.respond(spoken_summary)
                             except Exception as e:
                                 print(f"Warning: Failed to generate spoken summary: {e}")
+                                
+            # Drain recent speech into chat history
+            # Write current snapshot to state.json for the dashboard API to read
+            state_snapshot = consciousness_graph.get_state(run_config)
+            final_vals = state_snapshot.values
+            
+            # Re-read state.json right before writing to avoid wiping out API changes
+            try:
+                if os.path.exists("state.json"):
+                    with open("state.json", "r") as f:
+                        api_state = json.load(f)
+                        if "chat_history" in api_state:
+                            final_vals["chat_history"] = api_state["chat_history"]
+                        if "feature_requests" in api_state:
+                            final_vals["feature_requests"] = api_state["feature_requests"]
+                        if "capability_map" in api_state:
+                            final_vals["capability_map"] = api_state["capability_map"]
+                        if "implemented_features" in api_state:
+                            final_vals["implemented_features"] = api_state["implemented_features"]
+            except Exception as e:
+                pass
+
+            if "chat_history" not in final_vals:
+                final_vals["chat_history"] = chat_history
+
+            if hub.recent_speech:
+                for speech in hub.recent_speech:
+                    final_vals["chat_history"].append({
+                        "role": "brody",
+                        "text": speech,
+                        "timestamp": "now"
+                    })
+                hub.recent_speech.clear()
+                
+            try:
+                with open("state.json", "w") as f:
+                    json.dump(final_vals, f, indent=2)
+            except Exception as e:
+                print(f"Warning: Failed to write state.json: {e}")
                             
     except KeyboardInterrupt:
         print("\n\n[KeyboardInterrupt] Terminating consciousness loop...")

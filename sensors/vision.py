@@ -4,7 +4,7 @@ import numpy as np
 import threading
 from collections import deque
 from langchain_core.messages import HumanMessage
-from config import analytical_llm
+from config import analytical_llm, CAMERA_INDEX
 
 class VisionSensor:
     def __init__(self):
@@ -17,7 +17,7 @@ class VisionSensor:
         Captures a single frame from the default webcam.
         Returns the numpy array frame, or None if failed.
         """
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(CAMERA_INDEX)
         if not cap.isOpened():
             print("Warning: Could not open the webcam.")
             return None
@@ -29,7 +29,17 @@ class VisionSensor:
             print("Warning: Failed to capture a frame from the webcam.")
             return None
             
+        cv2.imwrite("latest_view.jpg", frame)
         return frame
+
+    def get_latest_frame(self) -> np.ndarray:
+        """
+        Retrieves the most recent frame from the background buffer
+        without opening the camera hardware.
+        """
+        if not self.frame_buffer:
+            return None
+        return self.frame_buffer[-1]
 
     def frame_to_base64(self, frame: np.ndarray) -> str:
         """
@@ -100,7 +110,7 @@ class VisionSensor:
         
         def capture_loop():
             # Keep video capture open in the background thread for speed
-            cap = cv2.VideoCapture(0)
+            cap = cv2.VideoCapture(CAMERA_INDEX)
             if not cap.isOpened():
                 print("Warning: Background vision thread could not open webcam.")
                 return
@@ -111,6 +121,7 @@ class VisionSensor:
                 ret, frame = cap.read()
                 if ret:
                     self.frame_buffer.append(frame)
+                    cv2.imwrite("latest_view.jpg", frame)
                 
                 # Wait for the interval duration
                 self._stop_event.wait(interval_seconds)
