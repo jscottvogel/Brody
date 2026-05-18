@@ -3,3 +3,7 @@ langchain
 chromadb
 python-dotenv
 langchain-anthropic
+pyaudio
+openai-whisper
+opencv-python
+pyttsx3

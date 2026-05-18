@@ -5,14 +5,8 @@ import shutil
 
 from graph import builder, memory, run_config
 from state import default_state
-
-BOOTSTRAP_OBSERVATIONS = [
-    'I see a wall', 
-    'I moved forward', 
-    'I hear a sound',
-    'My battery dropped 1%', 
-    "I tried to move but couldn't"
-]
+from config import reasoning_llm
+from sensors import hub
 
 def clear_data():
     paths_to_clear = [
@@ -46,6 +40,9 @@ def main():
 
     print("Starting consciousness loop...\n")
     
+    # Startup spoken message
+    hub.respond("I am becoming aware. I will now begin observing.")
+    
     # Recompile with an interrupt before 'recall' so we can inject sensor input for each cycle
     consciousness_graph = builder.compile(checkpointer=memory, interrupt_before=["recall"])
     
@@ -66,19 +63,12 @@ def main():
             current_state = state_snapshot.values
             cycle_count = current_state.get("cycle_count", 0)
             
-            # Determine sensor input for this cycle
-            if cycle_count < len(BOOTSTRAP_OBSERVATIONS):
-                sensor_input = BOOTSTRAP_OBSERVATIONS[cycle_count]
-                curiosity_queue = current_state.get("curiosity_queue", [])
-            else:
-                curiosity_queue = current_state.get("curiosity_queue", []).copy()
-                if curiosity_queue:
-                    # Pull next item from curiosity_queue
-                    sensor_input = curiosity_queue.pop(0)
-                else:
-                    sensor_input = "I am observing in silence."
+            # Fetch live sensor input and format for state
+            raw_input = hub.get_sensor_input()
+            sensor_input = hub.format_for_state(raw_input)
                     
-            # Inject new sensor input and updated queue into the paused state
+            # Inject new sensor input into the paused state
+            curiosity_queue = current_state.get("curiosity_queue", [])
             consciousness_graph.update_state(
                 run_config, 
                 {
@@ -88,7 +78,7 @@ def main():
             )
             
             print(f"\n--- Cycle {cycle_count} ---")
-            print(f"Sensor Input: {sensor_input}")
+            print(f"Sensor Input:\n{sensor_input}")
             
             # Track previous state counts to detect changes
             prev_open_questions = set(current_state.get("open_questions", []))
@@ -118,10 +108,19 @@ def main():
                                 print(f"    - {c.get('belief_1')} vs {c.get('belief_2')}")
                             prev_contradictions = len(contradictions)
                             
-                    # Print narrative every 10 cycles (when the narrative node actually updates it)
+                    # Print narrative every 10 cycles and summarize it out loud
                     if node_name == "narrative" and "narrative" in node_state:
-                        if node_state["narrative"]:
-                            print(f"\n=== Current Narrative ===\n{node_state['narrative']}\n=========================\n")
+                        narrative_text = node_state["narrative"]
+                        if narrative_text:
+                            print(f"\n=== Current Narrative ===\n{narrative_text}\n=========================\n")
+                            # Generate short summary of current robot thinking to speak aloud
+                            try:
+                                summary_prompt = f"Summarize this internal narrative into a single brief, spoken sentence representing your current thoughts: {narrative_text}"
+                                response = reasoning_llm.invoke(summary_prompt)
+                                spoken_summary = response.content.strip()
+                                hub.respond(spoken_summary)
+                            except Exception as e:
+                                print(f"Warning: Failed to generate spoken summary: {e}")
                             
     except KeyboardInterrupt:
         print("\n\n[KeyboardInterrupt] Terminating consciousness loop...")

@@ -1,7 +1,7 @@
 from typing import TypedDict, List, Dict, Any
 
 class ConsciousnessState(TypedDict):
-    sensor_input: str
+    sensor_input: Any
     world_model: dict
     world_confidence: dict
     self_model: dict

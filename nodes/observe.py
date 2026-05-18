@@ -8,10 +8,12 @@ def observe_node(state: ConsciousnessState) -> dict:
     
     if not sensor_input:
         return {}
+        
+    text_input = str(sensor_input)
 
     prompt = f"""
     You are an analytical observation module for a cognitive architecture.
-    Analyze the following raw sensory input: "{sensor_input}"
+    Analyze the following raw sensory input: "{text_input}"
     
     Extract structured facts and respond ONLY with valid JSON matching this schema exactly:
     {{
@@ -68,7 +70,7 @@ def observe_node(state: ConsciousnessState) -> dict:
 
     # 2. Episodic memory entry
     new_memory = {
-        "event": sensor_input,
+        "event": text_input,
         "emotion_tag": parsed.get("emotion_tag", "neutral")
     }
     episodic_memory = list(state.get('episodic_memory', []))
