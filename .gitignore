@@ -14,6 +14,7 @@ chromadb/
 chroma/
 .checkpoints/
 state.json
+latest_view.jpg
 *.sqlite3
 *.db
 
