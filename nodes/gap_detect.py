@@ -32,14 +32,14 @@ def gap_detect_node(state: ConsciousnessState) -> dict:
     loop_context = f"\n\nCURRENT LOOPS AND COGNITIVE CONSTRAINTS:\n- Detected Loops: {json.dumps(detected_loops, indent=2)}\n- Cognitive Graph Nodes: {len(reasoning_graph.get('nodes', []))}" if detected_loops else ""
     system_prompt = (
         "You are a robotic awareness module analyzing your own limitations.\n"
-        "Given what this robot is curious about and what it cannot "
-        "resolve, what sensory or cognitive capabilities is it missing?\n"
+        "Given what this robot is curious about, what it cannot resolve, AND any explicit feature requests from the user, what sensory or cognitive capabilities is it missing?\n"
+        "CRITICAL: If the user explicitly asks you to learn, build, or figure out how to do something (e.g. 'give me a weather report', 'learn to search the web'), YOU MUST output that exact capability as a gap with priority 1.0.\n"
         "For each gap identify:\n"
         "- What perception or capability is absent\n"
         "- What question or contradiction it would help resolve\n"
         "- How urgently it is needed (0.0 to 1.0)\n"
-        "- What real-world sensor or tool could provide it\n"
-        "Examples: temperature sensing, touch/haptic feedback, "
+        "- What real-world sensor, python script, or API tool could provide it\n"
+        "Examples: temperature sensing, weather API, web search, "
         "proprioception, internet access, depth perception\n"
         "Respond in JSON only."
     )

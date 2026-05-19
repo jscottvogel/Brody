@@ -22,7 +22,7 @@ analytical_llm = ChatAnthropic(
 )
 
 # Constants
-CYCLE_LIMIT = 100
+CYCLE_LIMIT = 1000
 CURIOSITY_QUEUE_MAX = 10
 
 DEFAULT_CAPABILITY_MAP = {
